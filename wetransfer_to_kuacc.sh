@@ -59,23 +59,36 @@ if [[ -e "$archive" ]]; then
   exit 1
 fi
 
-direct_url=$(python3 "$HELPER" download -g "$LINK")
-if [[ "$direct_url" != https://* || "$direct_url" == *$'\n'* ]]; then
-  printf 'Error: no valid direct download URL was returned. The link may be expired.\n' >&2
-  exit 1
-fi
-
 printf 'Downloading WeTransfer ZIP directly to KUACC: %s\n' "$archive"
-# -C - resumes a partial file if the remote server supports HTTP byte ranges.
-# On failure, the .part file is intentionally retained for a later retry.
-curl -fL -C - --retry 10 --retry-delay 5 -o "$partial" "$direct_url"
+max_attempts=6
+for ((attempt=1; attempt<=max_attempts; attempt++)); do
+  # Request a fresh direct URL on each attempt; download URLs can expire.
+  if ! direct_url=$(python3 "$HELPER" download -g "$LINK"); then
+    direct_url=''
+  fi
+  if [[ "$direct_url" != https://* || "$direct_url" == *$'\n'* ]]; then
+    printf 'Error: unable to obtain a valid download URL. Check whether the WeTransfer link has expired.\n' >&2
+    exit 1
+  fi
 
-printf 'Checking ZIP integrity (may take a while for large archives)...\n'
-if ! unzip -tq "$partial"; then
-  printf 'Error: ZIP validation failed. Partial file retained; do not extract it.\n' >&2
-  exit 1
-fi
+  # -C - resumes the .part file when the server supports HTTP byte ranges.
+  if curl -fL -C - --retry 2 --retry-delay 5 -o "$partial" "$direct_url"; then
+    printf 'Checking ZIP integrity (may take a while for large archives)...\n'
+    if ! unzip -tq "$partial"; then
+      printf 'Error: ZIP validation failed. File retained for inspection: %s\n' "$partial" >&2
+      exit 1
+    fi
+    mv -- "$partial" "$archive"
+    printf 'Success: downloaded and ZIP-verified: %s\n' "$archive"
+    printf 'If FASTQ MD5 checksums were provided, verify them after extraction.\n'
+    exit 0
+  fi
 
-mv -- "$partial" "$archive"
-printf 'Success: downloaded and ZIP-verified: %s\n' "$archive"
-printf 'If FASTQ MD5 checksums were provided, verify them after extraction.\n'
+  if (( attempt == max_attempts )); then
+    printf 'Error: download failed after %s attempts. Partial file retained: %s\n' "$max_attempts" "$partial" >&2
+    printf 'Run the same command again to retry.\n' >&2
+    exit 1
+  fi
+  printf 'Download interrupted (%s/%s). Retrying in 10 seconds...\n' "$attempt" "$max_attempts" >&2
+  sleep 10
+done
