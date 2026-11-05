@@ -100,3 +100,9 @@ Adapt the checksum command to the actual manifest format, if one was supplied.
 ## Validation
 
 Tested on KUACC in November 2026 with a small multi-file WeTransfer ZIP: initial download, ZIP integrity validation, skipping an existing complete archive, and resuming a deliberately interrupted transfer. Large-download interruption handling has also been added, but is not yet validated end-to-end on a new large transfer.
+
+## Acknowledgments
+
+Developed by **Ferzan Betül Berber** at Korkmaz Lab.
+
+This utility uses [transferwee](https://github.com/iamleot/transferwee) to resolve WeTransfer download URLs.
