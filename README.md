@@ -2,6 +2,18 @@
 
 Download large **multi-file WeTransfer ZIP archives** directly to KUACC, without storing the files on your laptop. Uses the upstream [`iamleot/transferwee`](https://github.com/iamleot/transferwee) Python helper to resolve the direct URL, then `curl` for resumable downloading.
 
+## Quick start
+
+Run these commands **on KUACC** (connect via `ssh USERNAME@login.kuacc.ku.edu.tr` first):
+
+```bash
+git clone https://github.com/Korkmaz-Lab/kuacc-data-transfer.git
+cd kuacc-data-transfer
+bash wetransfer_to_kuacc.sh 'https://we.tl/YOUR_LINK' '/PATH/TO/APPROVED/PROJECT'
+```
+
+Replace the example link and project directory. The script saves a verified ZIP in the destination directory; it does **not** extract the FASTQ files automatically. If the transfer is interrupted, leave the `.zip.part` file in place and rerun the same command.
+
 > **Scope:** This script is intended for WeTransfer links that yield a ZIP archive, such as a collection of FASTQ files. It does **not** automatically extract, overwrite, or delete existing experiment files. Single-file links that return a raw FASTQ instead of ZIP are not supported by this script.
 
 ## Requirements
@@ -21,7 +33,7 @@ Log in to KUACC:
 ssh YOUR_USERNAME@login.kuacc.ku.edu.tr
 ```
 
-Once this repository is published, clone it on KUACC:
+Clone the repository on KUACC:
 
 ```bash
 git clone https://github.com/Korkmaz-Lab/kuacc-data-transfer.git
@@ -40,7 +52,7 @@ The script will:
 
 1. Create the destination directory if missing.
 2. Obtain the direct download URL via `transferwee.py` (cached in `~/.cache/kuacc-data-transfer/`).
-3. Download into a `.zip.part` file using `curl -C - --retry 10 --retry-delay 5`.
+3. Download into a `.zip.part` file using resumable `curl`. On transfer errors (including error 18), retry up to six times, requesting a fresh direct URL each time.
 4. Test the ZIP archive with `unzip -tq` before renaming it to `.zip`.
 5. Skip an already-downloaded ZIP **only if it passes ZIP validation**.
 
@@ -48,7 +60,7 @@ Different WeTransfer links are given different file names (for example, `wetrans
 
 ## If the connection drops
 
-Run **the exact same command** again. A partially downloaded `.zip.part` file is kept for resumption. Resuming requires the remote server to support HTTP Range requests and the WeTransfer link to remain valid; neither is guaranteed. Do **not** delete the partial file unless you intend to restart.
+The script retries interrupted downloads automatically up to six times (with a new direct URL each attempt). If all attempts fail, run **the exact same command** again. A partially downloaded `.zip.part` file is kept for resumption. Resuming requires the remote server to support HTTP Range requests and the WeTransfer link to remain valid; neither is guaranteed. Do **not** delete the partial file unless you intend to restart.
 
 Use a KUACC-approved persistent session such as `tmux` for long downloads if available, and comply with the cluster's login/transfer node policies.
 
@@ -84,3 +96,7 @@ Adapt the checksum command to the actual manifest format, if one was supplied.
 - `transferwee.py` is **third-party code** and is cached from its upstream `master` branch on first use; review it and consider pinning to an approved commit before deploying widely.
 - The upstream WeTransfer interface may change; this workflow is known to have worked in one KUACC environment, but is not a guaranteed long-term API.
 - Do not delete source data until archive integrity and any supplied MD5 checksums are verified.
+
+## Validation
+
+Tested on KUACC in November 2026 with a small multi-file WeTransfer ZIP: initial download, ZIP integrity validation, skipping an existing complete archive, and resuming a deliberately interrupted transfer. Large-download interruption handling has also been added, but is not yet validated end-to-end on a new large transfer.
